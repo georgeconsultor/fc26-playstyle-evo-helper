@@ -1,14 +1,23 @@
-# PlayStyle Evo Helper (EA FC 26)
+<div align="center">
 
-> ### 📦 Evolutions have a new home — and it's much better!
->
-> This project has grown into **[fodder.gg](https://fodder.gg)** — a bigger, faster,
-> and much-improved tool with batch evolutions plus SBC solving, pack opening, and
-> item routing, built right into the EA FC 26 web app.
->
-> **👉 [Get the updated version at fodder.gg](https://fodder.gg)**
->
-> This userscript still works, but all new features and fixes now go to fodder.gg.
+# 📦 Evolutions have a new home — and it's much better!
+
+### This project has grown into **[fodder.gg](https://fodder.gg)**
+
+A bigger, faster, and much-improved tool — batch evolutions **plus** SBC solving,
+pack opening, and item routing, built right into the EA FC 26 web app.
+
+## 👉 **[Get the updated version at fodder.gg](https://fodder.gg)**
+
+*This userscript still works, but all new features and fixes now go to fodder.gg.*
+
+</div>
+
+---
+
+<br>
+
+# PlayStyle Evo Helper (EA FC 26)
 
 Batch-apply PlayStyle / PlayStyle+ evolutions on the EA FC 26 web app — one
 player or a whole squad at once, instead of EA's one-at-a-time UI.
