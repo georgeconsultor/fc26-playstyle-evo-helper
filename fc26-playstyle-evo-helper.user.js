@@ -339,6 +339,15 @@
         const res = await applyEvo(slotIds[i], itemId);
         if (res.data && res.data.isMaximumNumberOfSlotsReached) log(`⚠ ${tag}: max active slots — claim needed`, "warn");
         if (opts.claim) { try { await claimEvo(slotIds[i]); } catch (ce) { log(`   (claim skipped: ${errMsg(ce)})`, "dim"); } }
+        await sleep(Math.min(350, SETTLE_MS));
+        let confirmed = false;
+        try { confirmed = !!freshItemById(itemId) && !!evo && hasEvo(freshItemById(itemId), evo); } catch (_) {}
+        if (!confirmed) {
+          try { await reloadAndReselect(itemId); } catch (_) {}
+          await sleep(Math.min(SETTLE_MS, 900));
+          try { confirmed = !!freshItemById(itemId) && !!evo && hasEvo(freshItemById(itemId), evo); } catch (_) {}
+        }
+        if (!confirmed) throw new Error("EA accepted the slot, but the player did not persist the evo");
         ok++; done.push(slotIds[i]); log(`✔ ${tag}`, "ok");
       } catch (e) { fail++; log(`✗ ${tag} — ${errMsg(e)}`, "err"); }
       if (i < slotIds.length - 1 && !state.abort) await sleep(jitter(opts.delayMs));
