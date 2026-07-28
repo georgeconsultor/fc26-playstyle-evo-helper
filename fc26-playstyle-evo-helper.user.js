@@ -48,14 +48,22 @@
   const NOTICE_URL = "https://raw.githubusercontent.com/georgeconsultor/fc26-playstyle-evo-helper/main/notice.json";
   // Telemetry stays disabled in the fork unless we explicitly opt back in later.
   const METRICS_URL = "";
+  // Legacy 4th PS+ rarities still work as a fast path, and the dynamic slot
+  // discovery below can extend this for newer cards when the Academy data is loaded.
+  const FOURTH_PS_PLUS_RARITIES = new Set([104, 109]);
   const FOURTH_PS_PLUS = []; // {n, s(slotId), r(rewardId), kind:"PS+", fourth:true}
   let fourthPsPlusLoaded = false, fourthPsPlusLoading = false, fourthPsPlusLoadPromise = null;
   const isFourthPsPlus = (evo) => !!(evo && evo.kind === "PS+" && evo.fourth);
+  const hasFourthPsPlusCap = (it) => {
+    if (!it) return false;
+    try { if (FOURTH_PS_PLUS_RARITIES.has(it.rareflag)) return true; } catch (_) {}
+    try { return fourthPsPlusLoaded && fourthPsPlusForPlayer(it).some((g) => g && !g.disFourth); } catch (_) { return false; }
+  };
   const capPlus = (it, selectedEvos) => {
     const selected = Array.isArray(selectedEvos) ? selectedEvos : [];
     const selectedHasFourth = selected.some(isFourthPsPlus);
     const currentHasFourth = (numPlus(it) ?? 0) >= 4;
-    return (selectedHasFourth || currentHasFourth) ? 4 : CAP_PLUS;
+    return (selectedHasFourth || currentHasFourth || hasFourthPsPlusCap(it)) ? 4 : CAP_PLUS;
   };
 
   // Catalog: n=name, s=slotId, r=rewardId(=traitId+301), g=gk-only
@@ -1474,6 +1482,13 @@
   function suggestedSlots(it, pos, role) {
     const names = (ROLES[pos] && ROLES[pos][role]) || [];
     const gk = isGKItem(it);
+    const plusCap = capPlus(it);
+    const fourthByName = new Map();
+    if (plusCap > CAP_PLUS) {
+      fourthPsPlusForPlayer(it).forEach((g) => {
+        if (g && !g.disFourth && !fourthByName.has(baseName(g))) fourthByName.set(baseName(g), g);
+      });
+    }
     let plusUsed = numPlus(it) ?? 0, baseUsed = numBasic(it) ?? 0, owned = 0;
     const slots = [], skip = [];
     names.forEach((name, idx) => {
@@ -1481,12 +1496,26 @@
       const evo = wantPlus ? pspByName[name] : psByName[name];
       if (!evo) { skip.push(name); return; }
       if (evo.g && !gk) { skip.push(name + " (GK-only)"); return; }
-      if (hasEvo(it, evo)) { owned++; return; }
+      if (hasEvo(it, evo)) {
+        if (wantPlus && plusCap > CAP_PLUS) {
+          const fourth = fourthByName.get(name);
+          if (fourth) { slots.push(fourth.s); plusUsed++; return; }
+        }
+        owned++;
+        return;
+      }
       // Mutual exclusivity: a base PlayStyle the player already has as PS+ (e.g. a
       // 4th-PS+ from a prior evo) can't be applied — the + already covers it. The grid
       // blocks this; Suggest must too, or it preselects an impossible pick.
       if (evo.kind === "PS") { let po = false; try { po = !!it.hasPlusPlayStyle(evoTrait(evo)); } catch (_) {} if (po) { owned++; return; } }
-      if (wantPlus) { if (plusUsed >= CAP_PLUS) { skip.push(name + "+ (no room)"); return; } plusUsed++; }
+      if (wantPlus) {
+        if (plusUsed >= plusCap) { skip.push(name + "+ (no room)"); return; }
+        if (plusUsed >= CAP_PLUS) {
+          const fourth = fourthByName.get(name);
+          if (fourth) { slots.push(fourth.s); plusUsed++; return; }
+        }
+        plusUsed++;
+      }
       else { if (baseUsed >= CAP_BASIC) { skip.push(name + " (no room)"); return; } baseUsed++; }
       slots.push(evo.s);
     });
