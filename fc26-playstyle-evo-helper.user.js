@@ -1437,9 +1437,9 @@
   function fourthPsPlusDisabledReason() {
     const it = state.item;
     if (!it) return "Select a player first";
+    try { if (it.rareflag === 109) return "FUTTIES cards stay capped at 3 PS+."; } catch (_) {}
     const np = numPlus(it) ?? 0;
     if (np < 3) return "Needs 3 PS+ first";
-    try { if (it.rareflag === 109) return "FUTTIES cards stay capped at 3 PS+."; } catch (_) {}
     if (np >= 4) return "Already has 4 PS+";
     if (!fourthPsPlusLoaded && fourthPsPlusLoading) return "Loading 4th PS+ slots";
     if (fourthPsPlusLoaded && !fourthPsPlusForPlayer(it).some((g) => g && !g.disFourth)) return "No active 4th PS+ slot on this account";
@@ -1449,6 +1449,15 @@
   // a hover tip unless the selected player has exactly 3 PS+ and a loaded 4th slot is available.
   function updateFourthPsPlusTab() {
     const btn = fourthPsPlusTabBtn(); if (!btn) return;
+    const it = state.item;
+    try {
+      if (it && it.rareflag === 109) {
+        btn.style.display = "none";
+        if (tab === "GH4") setTab("PS+");
+        return;
+      }
+    } catch (_) {}
+    btn.style.display = "";
     const reason = fourthPsPlusDisabledReason();
     const enabled = !reason;
     btn.classList.toggle("disabled", !enabled);
