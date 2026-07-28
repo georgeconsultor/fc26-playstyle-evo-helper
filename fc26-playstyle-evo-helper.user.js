@@ -1,17 +1,17 @@
-// ==UserScript==
-// @name         PlayStyle Evo Helper — FC26
+﻿// ==UserScript==
+// @name         PlayStyle Evo Helper — FC26 George Edition
 // @namespace    https://github.com/nezygis/fc26-playstyle-evo-helper
-// @version      2.1.4
+// @version      2.2.0
 // @description  Batch-apply PlayStyle / PlayStyle+ evolutions on the EA FC 26 web app. Single mode (one player, hand-pick) or Bulk mode (click players to queue and evolve many at once).
-// @author       nezygis
-// @homepageURL  https://github.com/nezygis/fc26-playstyle-evo-helper
-// @supportURL   https://github.com/nezygis/fc26-playstyle-evo-helper/issues
+// @author       nezygis / George Oliveira fork
+// @homepageURL  https://github.com/georgeconsultor/fc26-playstyle-evo-helper
+// @supportURL   https://github.com/georgeconsultor/fc26-playstyle-evo-helper/issues
 // @match        https://www.ea.com/*ultimate-team/web-app*
 // @match        https://www.ea.com/*/ultimate-team/web-app*
 // @run-at       document-idle
 // @grant        none
-// @downloadURL  https://raw.githubusercontent.com/nezygis/fc26-playstyle-evo-helper/main/fc26-playstyle-evo-helper.user.js
-// @updateURL    https://raw.githubusercontent.com/nezygis/fc26-playstyle-evo-helper/main/fc26-playstyle-evo-helper.user.js
+// @downloadURL  https://raw.githubusercontent.com/georgeconsultor/fc26-playstyle-evo-helper/main/fc26-playstyle-evo-helper.user.js
+// @updateURL    https://raw.githubusercontent.com/georgeconsultor/fc26-playstyle-evo-helper/main/fc26-playstyle-evo-helper.user.js
 // ==/UserScript==
 
 /*
@@ -38,23 +38,25 @@
 
   const CAP_PLUS = 3, CAP_BASIC = 8, TRAIT_OFFSET = 301; // traitId = rewardId - 301 (icon classes run 0..35)
   const SETTLE_MS = 700; // wait after an apply/remove for the server to commit before re-fetching (else stale card)
-  const REPO_URL = "https://github.com/nezygis/fc26-playstyle-evo-helper";
+  const REPO_URL = "https://github.com/georgeconsultor/fc26-playstyle-evo-helper";
   // Clicking this opens the raw userscript, which Tampermonkey shows as an install/update page.
-  const INSTALL_URL = "https://raw.githubusercontent.com/nezygis/fc26-playstyle-evo-helper/main/fc26-playstyle-evo-helper.user.js";
+  const INSTALL_URL = "https://raw.githubusercontent.com/georgeconsultor/fc26-playstyle-evo-helper/main/fc26-playstyle-evo-helper.user.js";
   // Small JSON I can edit to broadcast a notice without shipping a new build.
   //   { "title": "Heads up", "body": "Your message here.", "url": "https://…", "linkText": "Open" }
   // title/body/link → a centered popup. Blank = nothing shown. (The header update
   // badge is separate — it compares @version, so version lives only in the header.)
-  const NOTICE_URL = "https://raw.githubusercontent.com/nezygis/fc26-playstyle-evo-helper/main/notice.json";
-  // Anonymous, cookieless load ping (GoatCounter — no PII, no cookies). Uses the
-  // no-JS pixel endpoint with our own path so it logs "tool loaded", not EA's pages.
-  // Dashboard: https://futhelper.goatcounter.com
-  const METRICS_URL = "https://futhelper.goatcounter.com/count";
-  // Glory Hunters cards (Festival of Football rarity 109, or 104 "Red") can hold a
-  // 4th PS+ via account-specific reward evos — everyone else caps at 3.
-  const GH_RARITIES = new Set([104, 109]);
-  const isGH = (it) => { try { return !!it && GH_RARITIES.has(it.rareflag); } catch (_) { return false; } };
-  const capPlus = (it) => (isGH(it) ? 4 : CAP_PLUS);
+  const NOTICE_URL = "https://raw.githubusercontent.com/georgeconsultor/fc26-playstyle-evo-helper/main/notice.json";
+  // Telemetry stays disabled in the fork unless we explicitly opt back in later.
+  const METRICS_URL = "";
+  const FOURTH_PS_PLUS = []; // {n, s(slotId), r(rewardId), kind:"PS+", fourth:true}
+  let fourthPsPlusLoaded = false, fourthPsPlusLoading = false, fourthPsPlusLoadPromise = null;
+  const isFourthPsPlus = (evo) => !!(evo && evo.kind === "PS+" && evo.fourth);
+  const capPlus = (it, selectedEvos) => {
+    const selected = Array.isArray(selectedEvos) ? selectedEvos : [];
+    const selectedHasFourth = selected.some(isFourthPsPlus);
+    const currentHasFourth = (numPlus(it) ?? 0) >= 4;
+    return (selectedHasFourth || currentHasFourth) ? 4 : CAP_PLUS;
+  };
 
   // Catalog: n=name, s=slotId, r=rewardId(=traitId+301), g=gk-only
   const PS = [{"n":"Finesse Shot","s":2141,"r":301,"g":0},{"n":"Far Throw","s":2142,"r":331,"g":1},{"n":"Enforcer","s":2143,"r":330,"g":0},{"n":"Intercept","s":2144,"r":317,"g":0},{"n":"Whipped Pass","s":2145,"r":313,"g":0},{"n":"Long Ball Pass","s":2146,"r":311,"g":0},{"n":"Incisive Pass","s":2147,"r":309,"g":0},{"n":"Deflector","s":2148,"r":336,"g":1},{"n":"Quick Step","s":2149,"r":326,"g":0},{"n":"Trickster","s":2150,"r":324,"g":0},{"n":"Slide Tackle","s":2151,"r":319,"g":0},{"n":"Aerial Fortress","s":2152,"r":320,"g":0},{"n":"Tiki Taka","s":2153,"r":312,"g":0},{"n":"Gamechanger","s":2154,"r":308,"g":0},{"n":"Chip Shot","s":2155,"r":302,"g":0},{"n":"Cross Claimer","s":2156,"r":333,"g":1},{"n":"Bruiser","s":2157,"r":329,"g":0},{"n":"Precision Header","s":2158,"r":305,"g":0},{"n":"Acrobatic","s":2159,"r":306,"g":0},{"n":"Long Throw","s":2160,"r":328,"g":0},{"n":"Press Proven","s":2161,"r":325,"g":0},{"n":"Block","s":2162,"r":316,"g":0},{"n":"Pinged Pass","s":2163,"r":310,"g":0},{"n":"Inventive","s":2164,"r":314,"g":0},{"n":"Power Shot","s":2165,"r":303,"g":0},{"n":"1v1 Close Down","s":2166,"r":334,"g":1},{"n":"Relentless","s":2167,"r":327,"g":0},{"n":"Rapid","s":2168,"r":322,"g":0},{"n":"Jockey","s":2169,"r":315,"g":0},{"n":"Anticipate","s":2170,"r":318,"g":0},{"n":"Low Driven Shot","s":2171,"r":307,"g":0},{"n":"Dead Ball","s":2172,"r":304,"g":0},{"n":"Far Reach","s":2173,"r":335,"g":1},{"n":"Footwork","s":2174,"r":332,"g":1},{"n":"Technical","s":2175,"r":321,"g":0},{"n":"First Touch","s":2176,"r":323,"g":0}];
@@ -68,11 +70,6 @@
   PS.sort(byBaseName);
   PSP.sort(byBaseName);
   const ALL = PS.concat(PSP);
-  // Glory Hunters "4th PS+" reward evos: account-specific Academy slots (category 9,
-  // slotName "GH 4th <PlayStyle>+"). Loaded live on demand — one-time consumables
-  // with duplicates per playstyle, so the grid dedupes by playstyle.
-  const GH = []; // {n, s(slotId), r(rewardId), kind:"PS+", g:0, gh:true}
-  let ghLoaded = false, ghLoading = false, ghLoadPromise = null;
   // EA groups PlayStyles into these six categories in the in-game UI; the grid
   // mirrors that grouping (and order) so it matches the player's mental model.
   const CAT_ORDER = ["Finishing", "Passing", "Defending", "Ball Control", "Physical", "Goalkeeping"];
@@ -133,8 +130,8 @@
     return out;
   }
 
-  // rareflag ids these evos can be applied to (defaults the club-search filter).
-  const ELIGIBLE_RARITIES = [30,94,98,103,109]; // 103 = FoF National Pride Red (untradeable)
+  // Club search now loads the full club; any manual rarity filtering is user-driven.
+  const ELIGIBLE_RARITIES = [];
 
   // position id (UTLocalizationUtil) -> role group
   const POS_GROUP = {
@@ -195,71 +192,123 @@
   const acadRepo = () => { try { return window.repositories.Academy; } catch (_) { return null; } };
   const getSlot = (id) => { try { return acadRepo().getSlotById(Number(id)); } catch (_) { return null; } };
 
-  // Page the whole Rewards category (id 9) — the GH 4th reward slots are paginated,
-  // so we keep requesting pages until the loaded count stops growing — then rebuild
-  // the GH catalog from every slot whose name starts "GH 4th ".
-  async function loadGHEvos() {
-    if (ghLoaded) return GH;
-    if (ghLoadPromise) return ghLoadPromise; // concurrent callers await the in-flight load
-    ghLoadPromise = (async () => {
-      ghLoading = true;
+  function slotRewardList(slot) {
+    const out = [];
+    const seen = new Set();
+    const push = (reward) => {
+      if (!reward || seen.has(reward) || typeof reward !== "object") return;
+      seen.add(reward);
+      out.push(reward);
+    };
+    try {
+      const list = slot && slot.getAllSlotRewards && slot.getAllSlotRewards();
+      if (Array.isArray(list)) list.forEach(push);
+    } catch (_) {}
+    try {
+      const direct = slot && (slot.rewards || slot.reward || slot.slotRewards);
+      if (Array.isArray(direct)) direct.forEach(push);
+      else push(direct);
+    } catch (_) {}
+    return out;
+  }
+  function slotTextBlob(slot) {
+    const parts = [];
+    const seen = new Set();
+    const add = (v) => { if (typeof v === "string" && v.trim()) parts.push(v.trim()); else if (typeof v === "number" && Number.isFinite(v)) parts.push(String(v)); };
+    const walk = (v, depth) => {
+      if (v == null || depth > 3) return;
+      if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") return add(v);
+      if (Array.isArray(v)) { v.forEach((x) => walk(x, depth + 1)); return; }
+      if (typeof v !== "object" || seen.has(v)) return;
+      seen.add(v);
+      Object.keys(v).forEach((k) => {
+        add(k);
+        try { walk(v[k], depth + 1); } catch (_) {}
+      });
+    };
+    walk(slot, 0);
+    return parts.join(" | ").toLowerCase();
+  }
+  function slotRewardId(reward) {
+    const ids = [reward && reward.type, reward && reward.rewardId, reward && reward.traitId, reward && reward.id]
+      .map((n) => Number(n)).filter((n) => Number.isFinite(n));
+    return ids.length ? ids[0] : null;
+  }
+  function rewardIsPlayStylePlus(reward) {
+    const id = slotRewardId(reward);
+    return id != null && PSP.some((e) => e.r === id);
+  }
+  function slotLooksLikeFourthPsPlus(slot) {
+    if (!slot || (slot.categoryId != null && slot.categoryId !== 9)) return false;
+    const rewards = slotRewardList(slot);
+    if (!rewards.some(rewardIsPlayStylePlus)) return false;
+    const text = slotTextBlob(slot);
+    const hasFourthWord = /\b(?:4th|fourth)\b/.test(text);
+    const hasPromoWord = /\b(?:glory hunters|futties|festival of football|gh)\b/.test(text);
+    const hasPlusRequirement = /\b(?:playstyle\+|ps\+|plus)\b/.test(text) && /\b3\b/.test(text);
+    if (hasFourthWord || hasPromoWord || hasPlusRequirement) return true;
+    const name = String((slot && (slot.slotName || slot.name || slot.title || "")) || "").trim().toLowerCase();
+    return /\b(?:4th|fourth)\b/.test(name) || /\b(?:glory hunters|futties)\b/.test(name);
+  }
+  // Page the whole Rewards category (id 9) - the dynamic 4th PS+ slots are paginated,
+  // so we keep requesting pages until the loaded count stops growing. Then rebuild the
+  // catalog from every slot that looks like a 4th PlayStyle+ reward.
+  async function loadFourthPsPlusSlots() {
+    if (fourthPsPlusLoaded) return FOURTH_PS_PLUS;
+    if (fourthPsPlusLoadPromise) return fourthPsPlusLoadPromise;
+    fourthPsPlusLoadPromise = (async () => {
+      fourthPsPlusLoading = true;
       let completed = false;
       try {
         const S = ACAD(), R = acadRepo();
-        // Fetch the Rewards category (id 9) directly — no need for the user to open
-        // anything in the web app. Page until the loaded count stops growing.
         if (S && R && S.requestSlotsByCategory) {
           let prev = -1, off = 0; const COUNT = 60;
           completed = true;
           for (let i = 0; i < 12; i++) {
             try { await svcObserve(S.requestSlotsByCategory({ categoryId: 9, offset: off, count: COUNT, sort: 0 })); }
-            catch (_) { completed = false; break; } // a page failed -> leave unloaded so it retries
+            catch (_) { completed = false; break; }
             const n = (R.getSlots() || []).filter((s) => s.categoryId === 9).length;
-            if (n === prev) break; // no new slots -> category fully loaded (or cache returned all)
+            if (n === prev) break;
             prev = n; off += COUNT;
           }
         }
-        rebuildGH();
-        if (completed) ghLoaded = true; // only lock in on a real successful load; else retry next call
-      } finally { ghLoading = false; ghLoadPromise = null; }
-      return GH;
+        rebuildFourthPsPlusSlots();
+        if (completed) fourthPsPlusLoaded = true;
+      } finally { fourthPsPlusLoading = false; fourthPsPlusLoadPromise = null; }
+      return FOURTH_PS_PLUS;
     })();
-    return ghLoadPromise;
+    return fourthPsPlusLoadPromise;
   }
-  function rebuildGH() {
+  function rebuildFourthPsPlusSlots() {
     const R = acadRepo(); if (!R) return;
-    GH.length = 0;
+    FOURTH_PS_PLUS.length = 0;
     (R.getSlots() || []).forEach((s) => {
-      if (!s.slotName || s.slotName.indexOf("GH 4th ") !== 0) return;
-      let r; try { r = s.getAllSlotRewards()[0].type; } catch (_) {}
+      if (!slotLooksLikeFourthPsPlus(s)) return;
+      const reward = slotRewardList(s).find(rewardIsPlayStylePlus);
+      const r = slotRewardId(reward);
       if (r == null) return;
-      GH.push({ n: s.slotName.slice(7).trim(), s: s.id, r, kind: "PS+", g: 0, gh: true });
+      FOURTH_PS_PLUS.push({ n: String(s.slotName || s.name || "").trim(), s: s.id, r, kind: "PS+", g: 0, fourth: true });
     });
-    GH.forEach((g) => { if (!ALL.includes(g)) ALL.push(g); }); // make GH slots resolvable via byId()
+    FOURTH_PS_PLUS.forEach((g) => { if (!ALL.includes(g)) ALL.push(g); });
   }
-  // Dedupe GH reward slots by playstyle for the grid. Each tile picks a slot the
-  // player is actually eligible for — canApplyTo enforces rarity 109 AND already-3-PS+,
-  // so a tile only lights up on a Glory Hunters card that has exactly 3 PS+.
-  function ghForPlayer(it) {
+  // Dedupe 4th PS+ reward slots by playstyle for the grid. Each tile picks a slot the
+  // player is actually eligible for, and the live slot.meetsRequirements() keeps the
+  // EA validation in charge of the final eligibility check.
+  function fourthPsPlusForPlayer(it) {
     const byPs = new Map();
-    GH.forEach((g) => { if (!byPs.has(g.n)) byPs.set(g.n, []); byPs.get(g.n).push(g); });
+    FOURTH_PS_PLUS.forEach((g) => { if (!byPs.has(g.n)) byPs.set(g.n, []); byPs.get(g.n).push(g); });
     const out = [];
     byPs.forEach((list) => {
       let chosen = null, applicable = false;
       for (const g of list) {
         const slot = getSlot(g.s);
-        // slot.meetsRequirements(player) evaluates the slot's eligibility rules
-        // (rarity 109 + already-3-PS+). (item.canApplyTo is a consumable-item method,
-        // unrelated to Academy slots — it always returns false for a player.)
         let ok = false; try { ok = !!it && !!slot && slot.meetsRequirements(it); } catch (_) {}
-        // Fail closed: these are one-time reward slots, so an unknown availability
-        // (missing slot or hasSlottedPlayer throwing) must NOT count as free.
         let free = false; try { free = !!slot && !slot.hasSlottedPlayer(); } catch (_) {}
         if (ok && free) { chosen = g; applicable = true; break; }
         if (!chosen) chosen = g;
       }
       const entry = Object.assign({}, chosen);
-      entry.disGH = !applicable; // grey out if not currently applicable to this card
+      entry.disFourth = !applicable;
       out.push(entry);
     });
     out.sort((a, b) => baseName(a).localeCompare(baseName(b)));
@@ -473,7 +522,7 @@
   async function startClubLoad(attempt, manual) {
     if (clubLoading && !manual) return;
     clubLoading = true;
-    const rarities = (ELIGIBLE_RARITIES && ELIGIBLE_RARITIES.length) ? ELIGIBLE_RARITIES : null;
+    const rarities = null;
     setClubStatus("Club: loading…" + (attempt > 1 ? " (retry " + attempt + ")" : ""), "load");
     try {
       const n = await loadClub(rarities);
@@ -510,7 +559,7 @@
   // Reload, then re-select the player by id so the new playstyles/counts render.
   async function reloadAndReselect(itemId) {
     if (!(window.services && window.services.Club && window.services.Club.search)) return false;
-    const rarities = (ELIGIBLE_RARITIES && ELIGIBLE_RARITIES.length) ? ELIGIBLE_RARITIES : null;
+    const rarities = null;
     setClubStatus("Club: refreshing after apply…", "load");
     try {
       const n = await loadClub(rarities);
@@ -999,7 +1048,7 @@
           <div class="tabs" style="margin-top:9px">
             <button data-tab="PS+">PlayStyle+ (36)</button>
             <button data-tab="PS">PlayStyle (36)</button>
-            <button data-tab="GH4" class="gh4tab disabled" data-tip="4th PlayStyle+|Glory Hunters cards can hold a 4th PS+ via reward evos — only for a GH card that already has 3 PS+.">4th PS+</button>
+            <button data-tab="GH4" class="gh4tab disabled" data-tip="4th PlayStyle+|Selected player needs 3 PS+ and a loaded 4th slot on this account. EA still validates the final apply.">4th PS+</button>
           </div>
           <div class="row" style="margin:7px 0;justify-content:flex-end">
             <button class="mini" data-act="none">Clear selection</button>
@@ -1063,16 +1112,12 @@
 	bindQueueEvents();
     makeDraggable(root, root.querySelector("header"));
     initTips();
-    // Default the club filter to evo-eligible rarities BEFORE the first list render,
-    // so the initial paint is already filtered (not the full club).
-    if (ELIGIBLE_RARITIES && ELIGIBLE_RARITIES.length) {
-      ELIGIBLE_RARITIES.forEach((id) => state.rarities.add(id));
-      els.rarbtn.textContent = "Rarity: " + state.rarities.size + " ▾";
-    }
+    // Start with the full club loaded; manual rarity filtering stays available in the UI.
+    els.rarbtn.textContent = "Rarity: all ▾";
     setTab("PS+");
     setMode("single");
 
-    updateGHTab(); // paint the always-visible 4th-PS+ tab in its locked state
+    updateFourthPsPlusTab(); // paint the always-visible 4th-PS+ tab in its locked state
 
     // Restore persisted preferences (localStorage — persists across sessions).
     if (Number.isFinite(prefs.delay)) els.delay.value = prefs.delay;
@@ -1100,7 +1145,7 @@
       } else if (e.key === "Escape" && state.running) { state.abort = true; }
     });
     log("Ready.", "head");
-    if (ELIGIBLE_RARITIES.length) log("Search limited to " + ELIGIBLE_RARITIES.length + " eligible rarities (adjust via Rarity ▾).", "dim");
+    log("Search now loads the full club; use Rarity ▾ only for manual filtering.", "dim");
     checkUpdate();
     checkNotice();
     try { new Image().src = METRICS_URL + "?p=/evo/load&t=" + encodeURIComponent("Evo Helper"); } catch (_) {} // anonymous cookieless load ping, best-effort
@@ -1206,8 +1251,8 @@
     if (qrm) return removeFromQueue(Number(qrm));
   }
 
-  const current = () => (tab === "GH4" ? ghForPlayer(state.item) : tab === "PS+" ? PSP : PS);
-  function setTab(t) { if (t === "GH4" && ghDisabledReason()) return; tab = t; els.root.querySelectorAll(".tabs button").forEach((b) => b.classList.toggle("on", b.getAttribute("data-tab") === t)); renderGrid(); }
+  const current = () => (tab === "GH4" ? fourthPsPlusForPlayer(state.item) : tab === "PS+" ? PSP : PS);
+  function setTab(t) { if (t === "GH4" && fourthPsPlusDisabledReason()) return; tab = t; els.root.querySelectorAll(".tabs button").forEach((b) => b.classList.toggle("on", b.getAttribute("data-tab") === t)); renderGrid(); }
 
   // ---- rarity multi-select ----
   // Anchor the rarity dropdown under its button (right-aligned, since the button
@@ -1280,7 +1325,8 @@
   function psChips(it) {
     const np = numPlus(it), nb = numBasic(it);
     if (np == null && nb == null) return "";
-    const cp = capPlus(it);
+    const selectedEvos = [...state.selected].map((s) => byId(s)).filter(Boolean);
+    const cp = capPlus(it, selectedEvos);
     const plusFull = (np ?? 0) >= cp, baseFull = (nb ?? 0) >= CAP_BASIC;
     return `<span class="psc">`
       + `<span class="pchip ${plusFull ? "full" : "room"}" title="PlayStyle+ used / cap">+${np ?? "?"}/${cp}</span>`
@@ -1363,46 +1409,47 @@
     renderPreview(); renderGrid(); updateCount();
     if (els.preview && els.preview.scrollIntoView) els.preview.scrollIntoView({ block: "nearest" });
     log("🎯 Selected " + playerName(it) + " (" + it.rating + ")", "head");
-  updateGHTab();
+  updateFourthPsPlusTab();
   }
 
-  // Show the "4th PS+" tab only for Glory Hunters cards; auto-load the reward evos
-  // the first time one is picked, then refresh the grid if that tab is open.
-  function ghTabBtn() { return els.root && els.root.querySelector('.tabs button[data-tab="GH4"]'); }
-  const ghKinds = () => new Set(GH.map((g) => g.n)).size;
+  // Show the "4th PS+" tab and auto-load reward evos the first time a compatible
+  // player is picked, then refresh the grid if that tab is open.
+  function fourthPsPlusTabBtn() { return els.root && els.root.querySelector('.tabs button[data-tab="GH4"]'); }
+  const fourthPsPlusKinds = () => new Set(FOURTH_PS_PLUS.map((g) => g.n)).size;
   // Why the 4th-PS+ tab is locked for the current pick ("" = it's available).
-  function ghDisabledReason() {
+  function fourthPsPlusDisabledReason() {
     const it = state.item;
-    if (!it) return "Select a Glory Hunters card first";
-    if (!isGH(it)) return "Glory Hunters cards only";
+    if (!it) return "Select a player first";
     const np = numPlus(it) ?? 0;
     if (np < 3) return "Needs 3 PS+ first";
     if (np >= 4) return "Already has 4 PS+";
+    if (!fourthPsPlusLoaded && fourthPsPlusLoading) return "Loading 4th PS+ slots";
+    if (fourthPsPlusLoaded && !fourthPsPlusForPlayer(it).some((g) => g && !g.disFourth)) return "No active 4th PS+ slot on this account";
     return "";
   }
   // Keep the 4th-PS+ tab ALWAYS visible (so people discover it) but greyed out with
-  // a hover tip unless the selected card is a Glory Hunters card with exactly 3 PS+.
-  function updateGHTab() {
-    const btn = ghTabBtn(); if (!btn) return;
-    const reason = ghDisabledReason();
+  // a hover tip unless the selected player has exactly 3 PS+ and a loaded 4th slot is available.
+  function updateFourthPsPlusTab() {
+    const btn = fourthPsPlusTabBtn(); if (!btn) return;
+    const reason = fourthPsPlusDisabledReason();
     const enabled = !reason;
     btn.classList.toggle("disabled", !enabled);
     btn.setAttribute("data-tip", "4th PlayStyle+|" + (enabled
-      ? "Add a 4th PS+ to this Glory Hunters card via a reward evo — pick one below."
-      : reason + ". The 4th PS+ is only for Glory Hunters cards that already have 3 PS+."));
+      ? "Add a 4th PS+ to this player via a loaded reward slot on this account."
+      : reason + ". The 4th PS+ still has to pass EA's final slot validation."));
     const paint = () => {
-      const b = ghTabBtn(); if (!b) return;
-      b.textContent = "4th PS+" + (ghLoaded && ghKinds() ? " (" + ghKinds() + ")" : "");
-      if (state.item && !ghDisabledReason() && tab === "GH4") { renderGrid(); updateCount(); }
+      const b = fourthPsPlusTabBtn(); if (!b) return;
+      b.textContent = "4th PS+" + (fourthPsPlusLoaded && fourthPsPlusKinds() ? " (" + fourthPsPlusKinds() + ")" : "");
+      if (state.item && !fourthPsPlusDisabledReason() && tab === "GH4") { renderGrid(); updateCount(); }
     };
     if (!enabled) { if (tab === "GH4") setTab("PS+"); paint(); return; }
-    if (ghLoaded) { paint(); return; }
-    log("Loading Glory Hunters evos…", "dim");
-    loadGHEvos().then(() => {
+    if (fourthPsPlusLoaded) { paint(); return; }
+    log("Loading 4th PS+ slots…", "dim");
+    loadFourthPsPlusSlots().then(() => {
       paint();
-      if (GH.length) log(`Glory Hunters evos ready — ${ghKinds()} playstyle${ghKinds() === 1 ? "" : "s"}.`, "head");
-      else if (ghLoaded) log("No Glory Hunters reward evos on this account.", "warn");
-      else log("Couldn't load Glory Hunters evos — will retry on next select.", "warn");
+      if (FOURTH_PS_PLUS.length) log("4th PS+ slots ready — " + fourthPsPlusKinds() + " playstyle" + (fourthPsPlusKinds() === 1 ? "" : "s") + ".", "head");
+      else if (fourthPsPlusLoaded) log("No 4th PS+ reward evos on this account.", "warn");
+      else log("Couldn't load 4th PS+ evos — will retry on next select.", "warn");
     });
   }
 
@@ -1910,7 +1957,7 @@ function bindQueueEvents() {
     }
     // GK-exclusive evos (g=1) need a GK; "any player" evos (g=0) are open to all (incl. GKs)
     const wrongScope = it ? (!!evo.g && !gkPlayer) : false;
-    const dis = wrongScope || owned || !!evo.disGH || plusBlocked; // owned -> would 460; disGH -> not applicable yet
+    const dis = wrongScope || owned || !!evo.disFourth || plusBlocked; // owned -> would 460; disFourth -> 4th slot not applicable yet
     const sel = state.selected.has(evo.s);
     const card = document.createElement("div");
     card.className = "ec" + (evo.kind === "PS+" ? " psp" : "") + (sel ? " sel" : "") + (owned ? " owned" : "") + (dis ? " dis" : "");
@@ -1918,7 +1965,7 @@ function bindQueueEvents() {
     const tipTitle = nm + (evo.kind === "PS+" ? " +" : "")
       + (wrongScope ? " · goalkeepers only" : "") + (owned ? " · already owned" : "")
       + (plusBlocked && !owned ? " · + version already applied/selected" : "")
-      + (evo.disGH && !owned ? " · needs 3 PS+ first (or none left)" : "");
+      + (evo.disFourth && !owned ? " · needs 3 PS+ first (or no 4th slot left)" : "");
     card.setAttribute("data-tip", tipTitle + "|" + psDesc(baseName(evo)));
     card.innerHTML = `<div class="ico" data-ini="${esc(initials(nm))}"><i class="${iconClass(evo.kind === "PS+", evoTrait(evo))}"></i></div>` +
       `<div class="nm">${esc(nm)}</div>${owned ? '<span class="own" aria-label="owned"></span>' : ""}`;
@@ -1976,38 +2023,37 @@ function bindQueueEvents() {
     updateCount();
   }
 
-    function checkCap(evo) {
+  function checkCap(evo) {
     if (!state.item) return true;
     const it = state.item;
+    const selectedEvos = [...state.selected].map(byId).filter(Boolean);
     if (evo.kind === "PS+") {
       const used = numPlus(it) ?? 0;
-      const selPlusAll = [...state.selected].filter((s) => { const e = byId(s); return e && e.kind === "PS+"; }).length;
-      if (evo.gh) {
-        // GH reward = the 4th slot (cap 4 on Glory Hunters cards).
-        const cap = capPlus(it);
-        if (used + selPlusAll >= cap) { log(`✋ 4th PS+ cap: player has ${used}/${cap} PS+, ${selPlusAll} queued. No room.`, "warn"); return false; }
-      } else {
-        // Repeatable PS+ never goes past 3 — the 4th can only come from a GH reward.
-        const selRepeat = [...state.selected].filter((s) => { const e = byId(s); return e && e.kind === "PS+" && !e.gh; }).length;
-        if (used + selRepeat >= CAP_PLUS) { log(`✋ PS+ cap: player has ${used}/${CAP_PLUS}, ${selRepeat} queued. No room.`, "warn"); return false; }
+      const selPlusAll = selectedEvos.filter((e) => e.kind === "PS+").length;
+      const cap = capPlus(it, evo.fourth ? selectedEvos.concat([evo]) : selectedEvos);
+      if (used + selPlusAll >= cap) {
+        const label = cap > CAP_PLUS ? "4th PS+ cap" : "PS+ cap";
+        log(`✋ ${label}: player has ${used}/${cap} PS+, ${selPlusAll} queued. No room.`, "warn");
+        return false;
       }
     } else {
       const used = numBasic(it) ?? 0;
-      const selB = [...state.selected].filter((s) => { const e = byId(s); return e && e.kind === "PS"; }).length;
+      const selB = selectedEvos.filter((e) => e.kind === "PS").length;
       if (used + selB >= CAP_BASIC) { log(`✋ Basic cap: player has ${used}/${CAP_BASIC}, ${selB} queued. No room.`, "warn"); return false; }
     }
     return true;
   }
 
   function updateCount() {
-    const selPlus = [...state.selected].filter((s) => byId(s) && byId(s).kind === "PS+").length;
-    const selB = state.selected.size - selPlus;
+    const selectedEvos = [...state.selected].map(byId).filter(Boolean);
+    const selPlus = selectedEvos.filter((e) => e.kind === "PS+").length;
+    const selB = selectedEvos.filter((e) => e.kind === "PS").length;
     let txt = `${state.selected.size} selected (${selPlus} PS+, ${selB} PS)`;
     let over = false;
     if (state.item) {
       // Project where the player lands once the queued batch is applied, so the
       // caps are visible before hitting Apply.
-      const cp = capPlus(state.item);
+      const cp = capPlus(state.item, selectedEvos);
       const pp = (numPlus(state.item) ?? 0) + selPlus, pb = (numBasic(state.item) ?? 0) + selB;
       txt += ` → ${pp}/${cp} PS+, ${pb}/${CAP_BASIC} basic`;
       over = pp > cp || pb > CAP_BASIC;
@@ -2087,7 +2133,7 @@ function bindQueueEvents() {
       if (ACAD() && CLUB()) {
         clearInterval(iv);
         if (!document.getElementById("fcevo")) build();
-        window.FCEvo = { applyEvo, claimEvo, removeEvoUpgrade, removeLastEvo, canRemoveEvo, runBatch, runDispatch, state, PS, PSP, clubPlayers, selectPlayer, scrapeRarities, clubRaritiesDump, eligibleRarities, loadClub, startClubLoad, readAttrs, dumpEntity, openEntity, freshItemById, reloadAndReselect, setMode, autoResolveRole, suggestedSlots, toggleQueue, clearQueue, requestRun };
+        window.FCEvo = { applyEvo, claimEvo, removeEvoUpgrade, removeLastEvo, canRemoveEvo, runBatch, runDispatch, state, PS, PSP, ALL, FOURTH_PS_PLUS, clubPlayers, selectPlayer, scrapeRarities, clubRaritiesDump, eligibleRarities, loadClub, startClubLoad, loadFourthPsPlusSlots, rebuildFourthPsPlusSlots, fourthPsPlusForPlayer, fourthPsPlusDisabledReason, updateFourthPsPlusTab, readAttrs, dumpEntity, openEntity, freshItemById, reloadAndReselect, setMode, autoResolveRole, suggestedSlots, toggleQueue, clearQueue, requestRun };
         // Wait until the active squad is loaded (app ready for club searches), then
         // load the club. Hard fallback at 15s so it can't hang; retries cover the rest.
         setClubStatus("Club: waiting for squad…", "load");

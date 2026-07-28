@@ -1,49 +1,39 @@
-<div align="center">
+# PlayStyle Evo Helper - FC26 George Edition
 
-# 📦 Evolutions have a new home — and it's much better!
+Fork do userscript `PlayStyle Evo Helper` para o EA FC 26 web app.
 
-### This project has grown into **[fodder.gg](https://fodder.gg)**
+## O que mudou neste fork
 
-A bigger, faster, and much-improved tool — batch evolutions **plus** SBC solving,
-pack opening, and item routing, built right into the EA FC 26 web app.
+- A busca do clube agora carrega o elenco completo, sem bloquear cartas novas ou FUTTIES por lista fixa de raridades.
+- O quarto `PlayStyle+` deixou de depender apenas de raridade Glory Hunters.
+- A aba `4th PS+` agora procura slots da Academy de forma dinâmica, com fallback seguro por nome quando os dados estruturados não bastam.
+- A validação final continua com a EA. O script só organiza a seleção local e tenta aplicar pelos serviços internos da web app.
+- A telemetria original foi desativada neste fork para evitar envio silencioso de métricas a terceiros.
 
-## 👉 **[Get the updated version at fodder.gg](https://fodder.gg)**
+## Instalação
 
-*This userscript still works, but all new features and fixes now go to fodder.gg.*
+1. Instale o [Tampermonkey](https://www.tampermonkey.net/).
+2. Abra o link raw do fork:
+   [fc26-playstyle-evo-helper.user.js](https://raw.githubusercontent.com/georgeconsultor/fc26-playstyle-evo-helper/main/fc26-playstyle-evo-helper.user.js)
+3. Confirme a instalação no Tampermonkey.
+4. Abra o EA FC 26 web app e use o painel flutuante do Evo Helper.
 
-</div>
+## Como funciona
 
----
+- `Single mode` para aplicar evoluções em um jogador por vez.
+- `Bulk mode` para enfileirar vários jogadores.
+- Sugestões por posição e função continuam ativas.
+- `PlayStyle`, `PlayStyle+`, `4th PS+` e `Remove last evo` continuam disponíveis.
+- O script ainda usa os serviços internos da web app, sem endpoint bruto nem chamadas HTTP extras.
 
-<br>
+## Riscos e limites
 
-# PlayStyle Evo Helper (EA FC 26)
+- Automatizar a web app pode violar os termos da EA e gerar punição na conta.
+- A elegibilidade final de cada evolução continua sendo decidida pela EA.
+- Mesmo com a lógica local ajustada, um slot só é considerado aplicável se a conta realmente tiver um slot ativo compatível.
 
-Batch-apply PlayStyle / PlayStyle+ evolutions on the EA FC 26 web app — one
-player or a whole squad at once, instead of EA's one-at-a-time UI.
+## Observações
 
-https://github.com/user-attachments/assets/df5194ad-1511-4275-a000-de6d88d38d8a
-
-## Install
-
-1. Install [Tampermonkey](https://www.tampermonkey.net/) and enable userscripts
-   in your browser (Chrome/Edge: turn on **Developer mode** in
-   `chrome://extensions`, or Tampermonkey → Settings → **Allow User Scripts** —
-   [guide](https://www.tampermonkey.net/faq.php?locale=en&q=Q209)).
-2. Click **[install the script](https://raw.githubusercontent.com/nezygis/fc26-playstyle-evo-helper/main/fc26-playstyle-evo-helper.user.js)** → **Install**.
-3. Open the FC 26 web app — a floating **Evo Helper** panel appears.
-
-No extension? Paste this as a bookmark URL and click it on the web app instead:
-
-```
-javascript:(function(){fetch('https://raw.githubusercontent.com/nezygis/fc26-playstyle-evo-helper/main/fc26-playstyle-evo-helper.user.js?t='+Date.now()).then(r=>r.text()).then(t=>{var s=document.createElement('script');s.textContent=t;document.body.appendChild(s);});})();
-```
-
-## License
-
-[MIT](LICENSE) — credit **nezygis** and link back to this project.
-
-## ⚠️ Disclaimer
-
-Automating the EA FC web app is against EA's Terms of Service and can get your
-account banned. Use at your own risk. Unofficial fan tool, not affiliated with EA.
+- Este fork foi preparado para continuar compatível com Tampermonkey.
+- O script continua sendo um único userscript instalável.
+- Se a EA alterar os nomes, slots ou regras internas, pode ser necessário um novo ajuste.
