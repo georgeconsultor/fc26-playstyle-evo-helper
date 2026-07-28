@@ -48,16 +48,16 @@
   const NOTICE_URL = "https://raw.githubusercontent.com/georgeconsultor/fc26-playstyle-evo-helper/main/notice.json";
   // Telemetry stays disabled in the fork unless we explicitly opt back in later.
   const METRICS_URL = "";
-  // Legacy 4th PS+ rarities still work as a fast path, and the dynamic slot
-  // discovery below can extend this for newer cards when the Academy data is loaded.
-  const FOURTH_PS_PLUS_RARITIES = new Set([104, 109]);
+  // Only the legacy non-FUTTIES 4th PS+ path is treated as valid here.
+  // FUTTIES cards stay capped at 3 PS+ because EA rejects the 4th apply.
+  const FOURTH_PS_PLUS_RARITIES = new Set([104]);
   const FOURTH_PS_PLUS = []; // {n, s(slotId), r(rewardId), kind:"PS+", fourth:true}
   let fourthPsPlusLoaded = false, fourthPsPlusLoading = false, fourthPsPlusLoadPromise = null;
   const isFourthPsPlus = (evo) => !!(evo && evo.kind === "PS+" && evo.fourth);
   const hasFourthPsPlusCap = (it) => {
     if (!it) return false;
     try { if (FOURTH_PS_PLUS_RARITIES.has(it.rareflag)) return true; } catch (_) {}
-    try { return fourthPsPlusLoaded && fourthPsPlusForPlayer(it).some((g) => g && !g.disFourth); } catch (_) { return false; }
+    return false;
   };
   const capPlus = (it, selectedEvos) => {
     const selected = Array.isArray(selectedEvos) ? selectedEvos : [];
@@ -252,11 +252,11 @@
     if (!rewards.some(rewardIsPlayStylePlus)) return false;
     const text = slotTextBlob(slot);
     const hasFourthWord = /\b(?:4th|fourth)\b/.test(text);
-    const hasPromoWord = /\b(?:glory hunters|futties|festival of football|gh)\b/.test(text);
+    const hasPromoWord = /\b(?:glory hunters|festival of football|gh)\b/.test(text);
     const hasPlusRequirement = /\b(?:playstyle\+|ps\+|plus)\b/.test(text) && /\b3\b/.test(text);
     if (hasFourthWord || hasPromoWord || hasPlusRequirement) return true;
     const name = String((slot && (slot.slotName || slot.name || slot.title || "")) || "").trim().toLowerCase();
-    return /\b(?:4th|fourth)\b/.test(name) || /\b(?:glory hunters|futties)\b/.test(name);
+    return /\b(?:4th|fourth)\b/.test(name) || /\b(?:glory hunters)\b/.test(name);
   }
   // Page the whole Rewards category (id 9) - the dynamic 4th PS+ slots are paginated,
   // so we keep requesting pages until the loaded count stops growing. Then rebuild the
@@ -1439,6 +1439,7 @@
     if (!it) return "Select a player first";
     const np = numPlus(it) ?? 0;
     if (np < 3) return "Needs 3 PS+ first";
+    try { if (it.rareflag === 109) return "FUTTIES cards stay capped at 3 PS+."; } catch (_) {}
     if (np >= 4) return "Already has 4 PS+";
     if (!fourthPsPlusLoaded && fourthPsPlusLoading) return "Loading 4th PS+ slots";
     if (fourthPsPlusLoaded && !fourthPsPlusForPlayer(it).some((g) => g && !g.disFourth)) return "No active 4th PS+ slot on this account";
